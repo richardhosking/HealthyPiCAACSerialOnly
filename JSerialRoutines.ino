@@ -206,4 +206,39 @@ void printECGVariables(ads1292r_data *data)
     Serial.println("");
     Serial.println("");
 }
+/**
+typedef struct afe44xx_Internal{
+    uint8_t n_spo2;
+    uint8_t n_heart_rate;
+    uint8_t n_resp_rate;
+    uint8_t buffer_length = BUFFER_FULL;
+    bool ch_spo2_valid = false;
+    bool ch_hr_valid = false;
+    bool ch_resp_valid = false;    
+}afe44xx_internal_data;
+*/
 
+void printspO2variables(afe44xx_Internal *data)
+{
+    Serial.println("Internal data for SpO2 algorithm");
+    Serial.print("O2 Sats "); 
+    Serial.println(data->n_spo2);
+    
+    Serial.print("Heart Rate ");   
+    Serial.println(data->n_heart_rate);
+     
+    Serial.printf("BUFFER LENGTH ");
+    Serial.println(data->buffer_length);
+                   
+    Serial.print("SpO2 valid ");   
+    Serial.println(data->ch_spo2_valid);
+    
+    Serial.print("Heart Rate valid ");   
+    Serial.println(data->ch_hr_valid);
+    
+    Serial.print("Resp valid ");   
+    Serial.println(data->ch_resp_valid);
+    
+    Serial.println("");
+    Serial.println("");
+}

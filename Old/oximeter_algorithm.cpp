@@ -49,7 +49,8 @@ void spo2_algorithm :: estimate_spo2(uint16_t *pun_ir_buffer, int32_t n_ir_buffe
   int32_t an_ratio[5], n_ratio_average;
   int32_t n_nume, n_denom ;
 */
-  // calculates DC mean and subtract DC from ir
+  // calculates mean of whole samples and subtract from IR Buffer - effectively approx DC removal
+  // ?Could we use Renesas algorithm here
   DC_ir_mean =0;
 
   for (k=0 ; k<n_ir_buffer_length ; k++ )

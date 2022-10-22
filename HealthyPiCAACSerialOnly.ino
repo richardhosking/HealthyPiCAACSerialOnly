@@ -27,7 +27,7 @@
 // Protocentral peripheral devices 
 #include "ADS1292r.h"
 #include "Protocentral_ecg_resp_signal_processing.h"
-#include "AFE4490_Oximeter.h"
+#include "myAFE4490_Oximeter.h"
 
 // New library IR Thermometer
 #include "MLX90614.h"
@@ -332,14 +332,17 @@ void loop()
     DataPacket[13] = (uint8_t)(tempint >> 8);
     
     // Debugging 
-    printPacket();
-    printOximeterVariables(&afe44xx_raw_data);
-    printECGVariables(&ads1292r_raw_data);  
-    delay(5000);
+    //printPacket();
+    //printOximeterVariables(&afe44xx_raw_data);
+    //printECGVariables(&ads1292r_raw_data);
+    //printspO2variables(&afe4490.internal_data); 
+    //Serial.print("Buffer counter ");
+    //Serial.println(afe4490.dec_buffer_count); 
+    //delay(5000);
     
     // Send completed packet    
     SPI.setDataMode(SPI_MODE0); 
-    //send_data_serial_port(); 
+    send_data_serial_port(); 
 
 }
 
