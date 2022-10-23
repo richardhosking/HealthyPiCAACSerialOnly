@@ -206,6 +206,7 @@ void printECGVariables(ads1292r_data *data)
     Serial.println("");
     Serial.println("");
 }
+
 /**
 typedef struct afe44xx_Internal{
     uint8_t n_spo2;

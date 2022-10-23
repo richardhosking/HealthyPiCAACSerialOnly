@@ -82,6 +82,10 @@
 // at 25/samples/sec 10 sec of data is 250 samples  
 #define IR_BUFFER_FULL 249
 
+// Myhack - change length of variables from int_32_t to uint8_t
+// Dont need 32 bits to store HR 0-250
+// or sats 0-100
+
 typedef struct afe44xx_Record{
   uint8_t heart_rate;
   uint8_t spo2;
