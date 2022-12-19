@@ -25,7 +25,7 @@
 #define myoximeter_algorithm_h
 
 #define SF_spo2          25    //sampling frequency
-#define BUFFER_SIZE  127
+#define BUFFER_LENGTH  255
 #define MA4_SIZE         4     // 4 point moving average
 #define min(x,y) ((x) < (y) ? (x) : (y)) // If x<y return x else return y
 
@@ -34,21 +34,18 @@ class spo2_algorithm
   public:
     spo2_algorithm();
 	void estimate_spo2(uint16_t *pun_ir_buffer, uint16_t *pun_red_buffer, afe44xx_internal_data *internal_data);    
-	//void estimate_spo2(uint16_t *pun_ir_buffer, int n_ir_buffer_length, uint16_t *pun_red_buffer, int8_t *pn_spo2, bool *pch_spo2_valid, int8_t *pn_heart_rate, bool *pch_hr_valid);
-    void find_peak( int32_t *pn_locs, int32_t *n_npks,  int32_t  *pn_x, int32_t n_size, int32_t n_min_height, int32_t n_min_distance, int32_t n_max_num );
-    void find_peak_above( int32_t *pn_locs, int32_t *n_npks,  int32_t  *pn_x, int32_t n_size, int32_t n_min_height);
-    void remove_close_peaks(int32_t *pn_locs, int32_t *pn_npks, int32_t *pn_x, int32_t n_min_distance);
-    void sort_ascend(int32_t  *pn_x, int32_t n_size);
-    void sort_indices_descend(  int32_t  *pn_x, int32_t *pn_indx, int32_t n_size);
+   
+    // My peak finding routine
+    int my_find_peaks(uint16_t *AC_data_buffer, int16_t *peaks_buffer, afe44xx_internal_data *internal_data);
     
   private:
-    // Red buffer
-    // static variable available to all objects of this class 
-    // one object only so seems irrelevant  
-    int32_t an_x[ BUFFER_SIZE];
-    // IR buffer
-    int32_t an_y[ BUFFER_SIZE];
-    // Lookup table 
+    // IR buffer for intermediate calculations - will hold buffer - DC offset 
+    uint16_t an_x[BUFFER_LENGTH];
+    // Red buffer for intermediate calculations
+    uint16_t an_y[BUFFER_LENGTH];
+    
+    // Lookup table for O2 sats %
+    // See quadratic function above 
     const uint8_t uch_spo2_table[184]={ 95, 95, 95, 96, 96, 96, 97, 97, 97, 97, 97, 98, 98, 98, 98, 98, 99, 99, 99, 99,
                                     99, 99, 99, 99, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
                                    100, 100, 100, 100, 99, 99, 99, 99, 99, 99, 99, 99, 98, 98, 98, 98, 98, 98, 97, 97,
@@ -61,19 +58,25 @@ class spo2_algorithm
                                     3,   2,  1  };
                                     
     // Variables from main function 
-    uint32_t DC_ir_mean,un_only_once;
-    int32_t k, n_i_ratio_count;
-    int32_t i, s, m, n_exact_ir_valley_locs_count, n_middle_idx;
-    int32_t n_th1, n_npks, n_c_min;
-    int32_t an_ir_valley_locs[15];
-    int32_t n_peak_interval_sum;
-    int32_t n_y_ac, n_x_ac;
-    int32_t n_spo2_calc;
-    int32_t n_y_dc_max, n_x_dc_max;
-    int32_t n_y_dc_max_idx, n_x_dc_max_idx;
-    int32_t an_ratio[5], n_ratio_average;
-    int32_t n_nume, n_denom;
-  
+    uint16_t sample_max, sample_min, threshold; 
+    // Locations of valleys
+    int16_t an_ir_valley_locs[15];
+    // For HR calculation 
+    int16_t n_peak_interval_sum;
+    float av_peak_interval;
+    int16_t n_npks;
+    
+    // For Sats calculation
+    int local_minIR, local_maxIR, local_minRED, local_maxRED;
+    int AC_IR, AC_RED, DC_IR, DC_RED;
+    
+    // intermediate variable for lookup table 
+    float R = 0.0;
+    int lookup;
+    uint16_t n_spo2_calc;
+    
+    int i, j, k; // Loop counters - Care with C++ integer arithmetic
+ 
 };
 
 #endif

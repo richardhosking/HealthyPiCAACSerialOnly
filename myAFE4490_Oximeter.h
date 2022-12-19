@@ -1,8 +1,8 @@
-//////////////////////////////////////////////////////////////////////////////////////////
+/*******************************************************************************
 //
 //    Arduino library for the AFE4490 Pulse Oximeter Shield
 
-//    Copyright (c) 2018 ProtoCentral
+//    Copyright (c) 2018 ProtoCentral (?and TI)
 //    Modified Richard Hosking 2022
 //
 //    This software is licensed under the MIT License(http://opensource.org/licenses/MIT).
@@ -14,7 +14,10 @@
 //   SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 //   
-/////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////*/
+
+
+
 #ifndef _AFE4490
 #define _AFE4490
 
@@ -76,66 +79,74 @@
 #define DIAG          0x30
 
 // Counter to select samples from data stream
-// AFE4490 setup at 500 samples/sec
+// AFE4490 setup at 500 samples/sec in init function 
 // decimate 1:20 => 25 samples/sec 
 #define DECIMATE      20
-// at 25/samples/sec 5 sec of data is 125 samples
+// at 25 samples/sec 5 sec of data is 125 samples
 // make buffer length a multiple of 2 to allow rapid division by bit shift  
-#define BUFFER_FULL 127
+#define BUFFER_LENGTH 128
+
+// Data Ready interrupt handler
+void afe4490_interrupt_handler(void);
 
 // to hold data for main routine 
 typedef struct afe44xx_Record{
-  uint8_t heart_rate;
-  uint8_t spo2;
-  uint8_t resp;
-  signed long IR_data;
-  signed long RED_data;
-  bool buffer_count_overflow = false;
+  int16_t heart_rate;
+  int16_t spo2;
+  int16_t resp;
+  long IR_data;
+  long RED_data;
+  bool spO2_data_ready = false;
+  // debugging 
+  uint16_t test1 = 0;
+  uint16_t test2 = 0;
+  uint16_t test3 = 0;        
 }afe44xx_data;
 
 // To hold internal data to pass to spO2/resp/HR routine
 typedef struct afe44xx_Internal{
-    uint8_t n_spo2;
-    uint8_t n_heart_rate;
-    uint8_t n_resp_rate;
-    uint8_t buffer_length;
+    int16_t n_spo2;
+    int16_t n_heart_rate;
+    int16_t n_resp_rate;
+    int16_t buffer_length; // Care here - C++ integer arithmetic gotchas!
     bool ch_spo2_valid = false;
     bool ch_hr_valid = false;
-    bool ch_resp_valid = false;    
-}afe44xx_internal_data;
-
+    bool ch_resp_valid = false;
+    uint16_t sample_max = 0;
+    uint16_t sample_min = 0;
+    uint16_t threshold = 0; 
+    bool spO2_calc_done = false;
+             
+    // debugging 
+    float test1 = 0;
+    uint16_t test2 = 0;
+    uint16_t test3 = 0;
+    uint16_t testbuffer[16];
     
+}afe44xx_internal_data;
 
 class AFE4490
 {
   public:
     AFE4490();  
-    bool afe44xxInit (const int chip_select,const int data_ready);
+    bool afe44xxInit (const int chip_select, const int power_down);
     void afe44xxWrite (uint8_t address, uint32_t data,const int chip_select);
     unsigned long afe44xxRead (uint8_t address,const int chip_select);
-    boolean get_AFE4490_Data (afe44xx_data *afe44xx_raw_data,const int chip_select,const int data_ready);
-    boolean get_AFE4490_Data (afe44xx_data *afe44xx_raw_data);
-    
+    bool get_AFE4490_data_if_available (afe44xx_data *afe44xx_raw_data,const int chip_select);
+    static void afe4490_interrupt_handler(void);
+      
     // Internal Data struct
     afe44xx_internal_data internal_data;
     //infrared and red LED sensor data post decimation and bit cleaning
-    uint16_t aun_ir_buffer[BUFFER_FULL]; 
-    uint16_t aun_red_buffer[BUFFER_FULL];
-    
-    // Data length of decimated IR and red buffers 
-    uint8_t dec_buffer_count, dec; 
+    uint16_t aun_ir_buffer[BUFFER_LENGTH]; 
+    uint16_t aun_red_buffer[BUFFER_LENGTH];
       
   private:
-
-    
-    // Volatile keyword refers to signal handlers 
-    // or special memory
-    bool afe44xx_data_ready = false;
-    // Not sure if it is correct use in this context
-
-    
-    // 22 bit numbers from chip
-    unsigned long IRtemp,REDtemp;
+     // Data length of decimated IR and red buffers 
+    int dec_buffer_count, dec; 
+    // 22 bit raw data numbers from AFE4490
+    // numbers are in 2s complement
+    long IRtemp,REDtemp;
      
  };
 

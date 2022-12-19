@@ -1,4 +1,4 @@
-//////////////////////////////////////////////////////////////////////////////////////////
+/*****************************************************************************************
 //
 //    Arduino library for the AFE4490 Pulse Oximeter Shield
 //    from Protocentral code modified by Richard Hosking 2022
@@ -12,97 +12,125 @@
 //   SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 //   
-/////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////*/
+
 #include "myAFE4490_Oximeter.h"
 #include "myoximeter_algorithm.h"
+#include "Arduino.h"
+
+// Data Ready interrupt handler
+bool  afe4490_intr_flag = false;
+
+void IRAM_ATTR afe4490_interrupt_handler(void)
+{
+ afe4490_intr_flag = true;
+}     
 
 // Instance of O2 calculation algorithm in oximeter_algorithm.h
 spo2_algorithm Spo2;
 
+
+ // Constructor 
+AFE4490 :: AFE4490()
+{
+    // Initialize struct to hold internal data to pass to spO2/resp/HR routine
+    internal_data.n_spo2 = 10;
+    internal_data.n_heart_rate = 10;
+    internal_data.n_resp_rate = 10;
+    internal_data.buffer_length = BUFFER_LENGTH;
+    internal_data.ch_spo2_valid = false;
+    internal_data.ch_hr_valid = false;
+    internal_data.ch_resp_valid = false;
+    internal_data.test1 = 0;   
+    internal_data.test2 = 0;     
+    dec = 0;
+    dec_buffer_count = 0;
+    afe4490_intr_flag = false;
+    
+}
+
 /**
  * Main Oximeter function
- * Passes a pointer to typedef struct of Type afe44xx_data
+ * Passes a pointer to struct of type afe44xx_data
  * afe44xx_data *afe44xx_raw_data
  * which holds HR and spO2
  * and pin variables
  * 
  */ 
- // Constructor 
-AFE4490 :: AFE4490()
+bool AFE4490 :: get_AFE4490_data_if_available  (afe44xx_data *afe44xx_raw_data,const int chip_select)
 {
-    // Initialize struct to hold internal data to pass to spO2/resp/HR routine
-    internal_data.n_spo2 = 50;
-    internal_data.n_heart_rate = 20;
-    internal_data.n_resp_rate = 10;
-    internal_data.buffer_length = BUFFER_FULL;
-    internal_data.ch_spo2_valid = false;
-    internal_data.ch_hr_valid = false;
-    internal_data.ch_resp_valid = false; 
-    dec = 0;
-    dec_buffer_count = 0;
-    
-}
+    if (afe4490_intr_flag = true)
+    {
+
+        // Enable SPI READ (Disabled on reset)
+        afe44xxWrite(CONTROL0, 0x000001,chip_select);
+        // Read IR and RED values
+        // These will be 24 bits
+        // 22 bits are valid - 2s complement format
+        // IRTemp is a 32 bit unsigned long 
+        IRtemp = afe44xxRead(LED1VAL,chip_select);
+        
+        // Do we need to do this before each SPI read?
+        afe44xxWrite(CONTROL0, 0x000001,chip_select);  
+        REDtemp = afe44xxRead(LED2VAL,chip_select);
+        
+        // Discard top 10 bits (22 bits only from ADC)
+        // get a smoother display if we read at 500SPS
+        IRtemp = (long) (IRtemp << 10);
+        IRtemp = (long) (IRtemp >> 10);
+        afe44xx_raw_data->IR_data = (signed long) (IRtemp);
+        
+        REDtemp = (long) (REDtemp << 10);
+        REDtemp = (long) (REDtemp >> 10);  
+        afe44xx_raw_data->RED_data = (signed long) (REDtemp);
+        
+        // decimate data 
+        // if dec = 10 and sample rate is 500 samples/sec
+        // aun buffers will be updated at 50 samples/sec
+        // Hence 256 samples is approx 5 sec worth  
+        if (dec == DECIMATE)
+          {
+              // Decimate and truncate to 16 bits
+              aun_ir_buffer[dec_buffer_count] = (uint16_t) ((afe44xx_raw_data->IR_data) >> 5);  // ? should this be >>6 22 bits to 16 
+              aun_red_buffer[dec_buffer_count] = (uint16_t) ((afe44xx_raw_data->RED_data) >> 5);
+              dec_buffer_count++;
+              dec = 0;
+          }
+        
+        dec++;
          
-
-boolean AFE4490 :: get_AFE4490_Data (afe44xx_data *afe44xx_raw_data,const int chip_select,const int data_ready)
-{
-  // Enable SPI READ (Disabled on reset)
-  afe44xxWrite(CONTROL0, 0x000001,chip_select);
-  // Read IR and RED values
-  // These will be 24 bits
-  // 22 bits are valid - 2s complement format
-  // IRTemp is a 32 bit unsigned long 
-  IRtemp = afe44xxRead(LED1VAL,chip_select);
-  
-  // Do we need to do this before each SPI read?
-  afe44xxWrite(CONTROL0, 0x000001,chip_select);  
-  REDtemp = afe44xxRead(LED2VAL,chip_select);
-  
-  afe44xx_data_ready = true;
-  
-  // Discard top 10 bits (22 bits only from ADC)
-  IRtemp = (unsigned long) (IRtemp << 10);
-  IRtemp = (unsigned long) (IRtemp >> 10);
-  afe44xx_raw_data->IR_data = (signed long) (IRtemp);
-  
-  REDtemp = (unsigned long) (REDtemp << 10);
-  REDtemp = (unsigned long) (REDtemp >> 10);  
-  afe44xx_raw_data->RED_data = (signed long) (REDtemp);
-    
-  // decimate data 
-  // if dec = 20 and sample rate is 500 samples/sec
-  // aun buffers will be updated at 25 samples/sec
-  // Hence 127 samples is 5 sec worth  
-  if (dec == DECIMATE)
-  {
-      // Decimate and trancate to 16 bits
-      aun_ir_buffer[dec_buffer_count] = (uint16_t) ((afe44xx_raw_data->IR_data) >> 6);  // ? should this be >>6 22 bits to 16 
-      aun_red_buffer[dec_buffer_count] = (uint16_t) ((afe44xx_raw_data->RED_data) >> 6);
-      dec_buffer_count++;
-      dec = 0;
-  }
-  dec++;
-   // When Buffer has approx 5 seconds of data 
-  if (dec_buffer_count > BUFFER_FULL)
-  {
-    // Call Routine to estimate spO2 and heart rate 
-    // Pass to routine:
-    // IR buffer, Buffer length = 127, Red buffer, pO2 sats, pO2 sats flag, Heart rate, heart rate flag, resp resp flag, BUFFER_FULL in struct
-    // Note passing arrays dont pass address 
-    // Passing struct - pass address??  
-    Spo2.estimate_spo2(aun_ir_buffer, aun_red_buffer, &internal_data);
-    
-    // move data into the struct afe44xx_raw_data
-    dec_buffer_count = 0;
-    afe44xx_raw_data->buffer_count_overflow = true;
-  }
-  // move data into the struct afe44xx_raw_data
-  afe44xx_raw_data->spo2 = internal_data.n_spo2;
-  afe44xx_raw_data->heart_rate = internal_data.n_heart_rate;
-  afe44xx_data_ready = false;
-  return true;
+        // When Buffer has approx 5 seconds of data 
+        //dec_buffer_count = 130;
+        if (dec_buffer_count > BUFFER_LENGTH-1)
+        {
+            // Call Routine to estimate spO2 and heart rate 
+            // Pass to routine:
+            // Note passing arrays dont pass address 
+            // Passing struct - pass address  
+            Spo2.estimate_spo2(aun_ir_buffer, aun_red_buffer, &internal_data);
+            dec_buffer_count = 0;
+            afe44xx_raw_data->spO2_data_ready = internal_data.spO2_calc_done;
+            internal_data.spO2_calc_done = false; 
+        }
+        
+        // move data into the struct afe44xx_raw_data
+        afe44xx_raw_data->spo2 = internal_data.n_spo2;
+        afe44xx_raw_data->heart_rate = internal_data.n_heart_rate;
+        // Debugging stuff
+        afe44xx_raw_data->test1 = internal_data.test1;
+        afe44xx_raw_data->test2 = internal_data.test2;
+        afe44xx_raw_data->test3 = internal_data.test3; 
+        //internal_data.testbuffer[30] = 44444;               
+        afe4490_intr_flag = false;
+        return true; 
+    }
+    else
+    {
+        return false;
+    }
 }
 
+// Set up AFE4490
 bool AFE4490 :: afe44xxInit (const int chip_select,const int power_down_pin)
 {
   // In fact this is a power down pin 

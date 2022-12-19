@@ -4,6 +4,7 @@
 *    Arduino will compile all files with *.ino in the current directory together 
 *    in alphabetical order 
 *    This file contains miscellaneous routines 
+*    mainly for debugging
 * 
 //   Copyright(2022) Richard Hosking 
 //   Bluetooth and Wifi not implemented 
@@ -79,7 +80,7 @@ void send_data_serial_port()
   }
 }
 
-// Debugging - write out packet 
+// Debugging stuff - write out packet 
 
 void printPacket()
 {
@@ -157,7 +158,7 @@ void printPacket()
   uint8_t spo2;
   signed long IR_data;
   signed long RED_data;
-  boolean buffer_count_overflow = false;
+  boolean spO2_data_ready = false;
 }afe44xx_data;*/
 
 // Pass a pointer to the struct
@@ -176,9 +177,18 @@ void printOximeterVariables(afe44xx_data *data)
     Serial.println(data->RED_data);  
     Serial.printf("RED Data Hex : %x", data->RED_data);
     Serial.println("");          
-  
+  // debugging 
+    Serial.print("Test1 data  ");
+    Serial.println(data->test1);
+    Serial.printf("Test1 data Hex : %x", data->test1);
+    Serial.println("");          
+    Serial.print("Test2 Data  ");   
+    Serial.println(data->test2);  
+    Serial.printf("test2 Data Hex : %x", data->test2);
+    Serial.println("");          
+ 
     Serial.print("Buffer count overflow ");   
-    Serial.println(data->buffer_count_overflow);    
+    Serial.println(data->spO2_data_ready);    
     Serial.println("");
     Serial.println("");
 }
@@ -240,6 +250,72 @@ void printspO2variables(afe44xx_Internal *data)
     Serial.print("Resp valid ");   
     Serial.println(data->ch_resp_valid);
     
+      // debugging 
+    Serial.print("Test1 data  ");
+    Serial.println(data->test1);
+    Serial.printf("Test1 data Hex : %x", data->test1);
+    Serial.println("");          
+    Serial.print("Test2 Data  ");   
+    Serial.println(data->test2);  
+    Serial.printf("test2 Data Hex : %x", data->test2);
+    Serial.println("");
+              
+    Serial.print("Test3 Data  ");   
+    Serial.println(data->test3);  
+    Serial.printf("Test3 Data Hex : %x", data->test3);
+    Serial.println("");              
     Serial.println("");
     Serial.println("");
 }
+
+// receiving arrays as a parameter to a function
+// C++ sends a pointer automatically 
+// either void func(<datatype> *array) { ... } // explicit pointer
+// or void func(<datatype> array[]) { ... } // unsized array - pointer implicit
+// or void func(<datatype> array(SIZE]) { ... } // explicit size 
+void print_buffer(uint16_t buffer[])
+{
+    // length of the array
+    int i = 128; //sizeof(buffer)/sizeof(buffer[0]);
+    int j,k = 0;
+    Serial.println("AC Buffer data:");
+     
+    for (j=0; j < i; j++)
+    {
+        Serial.print(buffer[j]);
+        // format to 8 figures per line in serial monitor 
+        if (j%8 == 0)
+        {
+            Serial.println("  ");
+        }
+        else
+        {
+            Serial.print("  ");
+        }
+    }
+    Serial.println("  ");
+ 
+}      
+void print_locations_buffer(uint16_t buffer[])
+{
+    // length of the array
+    int i = 15; //sizeof(buffer)/sizeof(buffer[0]);
+    int j,k = 0;
+    Serial.println("Peak locations array:");
+     
+    for (j=0; j < i; j++)
+    {
+        Serial.print(buffer[j]);
+        // format to 8 figures per line in serial monitor 
+        if (j%8 == 0)
+        {
+            Serial.println("  ");
+        }
+        else
+        {
+            Serial.print("  ");
+        }
+    }
+    Serial.println("  ");
+ 
+}      

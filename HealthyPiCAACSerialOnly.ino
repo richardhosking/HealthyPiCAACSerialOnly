@@ -7,8 +7,7 @@
 //   
 // 
 //   Heartrate and respiration computation based on original code from Texas Instruments
-//   and Renesas algorithm at 
-//
+//   
 //   This software is licensed under the MIT License(http://opensource.org/licenses/MIT).
 //
 //   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,  INCLUDING BUT
@@ -22,6 +21,7 @@
 // Includes 
 #include <SPI.h>
 #include <Wire.h>
+
 #include <Update.h>
 
 // Protocentral peripheral devices 
@@ -29,9 +29,6 @@
 #include "Protocentral_ecg_resp_signal_processing.h"
 
 #include "myAFE4490_Oximeter.h"
-
-#include "AFE4490_Oximeter.h"
-
 
 // New library IR Thermometer
 #include "MLX90614.h"
@@ -76,12 +73,10 @@ const int resolution = 8;
 
 
 // ECG variables 
-// Data successfully loaded fro ADS1292
-bool ECG_data_loaded = false;
+
 // ECG leads not connected 
 bool leadoff_detected = true;
-// Not sure why we need both
-uint8_t lead_flag = 0x04;
+
 // 16 bit samples 
 int16_t ecg_wave_sample, ecg_filterout;
 
@@ -92,10 +87,10 @@ int16_t resp_buffer[RESP_BUFFER_SIZE];
 uint16_t resp_buffer_counter = 0;
 
 
-volatile uint8_t global_HeartRate = 0;
-volatile uint8_t global_HeartRate_prev = 0;
-volatile uint8_t global_RespirationRate = 0;
-volatile uint8_t global_RespirationRate_prev = 0;
+int8_t global_HeartRate = 0;
+int8_t global_HeartRate_prev = 0;
+int8_t global_RespirationRate = 0;
+int8_t global_RespirationRate_prev = 0;
 
 
 // Instances of peripheral classes 
@@ -135,7 +130,7 @@ bool spo2_calc_done = false;
  * int8_t spo2;
  * signed long IR_data;
  * signed long RED_data;
- * boolean buffer_count_overflow = false;
+ * boolean spO2_data_ready = false;
  * }afe44xx_data;
  * 
  */
@@ -147,9 +142,9 @@ int spo2;
 MLX90614 mlx90614;
 // Temperature variables
 double temp, temperature;
-uint16_t tempint;
+int16_t tempint;
 // Temperature timing
-volatile long temp_read_timer = 0;
+long temp_read_timer = 0;
 // Flag for presence of Temp sensor 
 bool temperatureSensor = false;
 
@@ -209,7 +204,10 @@ void setup()
   {
       Serial.println("Could not initialize Oximeter!");
   }
-    
+  
+  attachInterrupt(digitalPinToInterrupt(AFE4490_DRDY_PIN), afe4490_interrupt_handler, RISING); // Digital2 is attached to Data ready pin of AFE is interrupt0 in ARduino 
+  
+     
   // And Initialize ECG frontend - needs SPI_MODE1
   SPI.setDataMode(SPI_MODE1); //Set SPI mode as 1
   delay(10);
@@ -248,16 +246,12 @@ void loop()
     // Get raw data from ADS1292 - needs SPI_MODE1
     // Store in ads1292r_raw_data which is a struct in the ADS1292R header
     SPI.setDataMode(SPI_MODE1);
-    //delay(10);
-    ECG_data_loaded = ADS1292R.getAds1292r_Data_if_Available(ADS1292_DRDY_PIN, ADS1292_CS_PIN, &ads1292r_raw_data);
-
-    if (ECG_data_loaded == true)
+    if (ADS1292R.getAds1292r_Data_if_Available(ADS1292_DRDY_PIN, ADS1292_CS_PIN, &ads1292r_raw_data))
     {
         // Check to see if leads are connected 
         if (!((ads1292r_raw_data.status_reg & 0x1f) == 0))
         {
             leadoff_detected = true;
-            lead_flag = 0x04;
             ecg_filterout = 0;
             resp_filterout = 0;
             DataPacket[14] = 0;
@@ -267,7 +261,6 @@ void loop()
         {
             // If all is OK start data processing
             leadoff_detected = false;
-            lead_flag = 0x06;
             
             // Extract data from struct and discard lowest 8 bits of 24
             ecg_wave_sample = (int16_t)(ads1292r_raw_data.raw_ecg >> 8); 
@@ -296,27 +289,30 @@ void loop()
         
     // Get Oximeter data needs SPI_MODE0
     SPI.setDataMode(SPI_MODE0);
-    //delay(10);
-    //oximeter_data_loaded = afe4490.get_AFE4490_Data(&afe44xx_raw_data, AFE4490_CS_PIN, AFE4490_DRDY_PIN);
+
     // Load data from Oximeter
-    if (afe4490.get_AFE4490_Data(&afe44xx_raw_data, AFE4490_CS_PIN, AFE4490_DRDY_PIN))
-    {
+    // afe44xx_raw_data is a struct in the ADE4490 header
+    if (afe4490.get_AFE4490_data_if_available(&afe44xx_raw_data, AFE4490_CS_PIN))
+    {   
+        //Serial.println("Get data"); 
         // Copy Raw PPG data to packet 
         memcpy(&DataPacket[4], &afe44xx_raw_data.IR_data, sizeof(signed long));
         memcpy(&DataPacket[8], &afe44xx_raw_data.RED_data, sizeof(signed long)); 
-        //Serial.println("Oximeter data loaded");
+ 
         // Heart rate and respiration rates algorithms are called from ECG/Oximeter Classes
         // Placeholders
         global_HeartRate = afe44xx_raw_data.heart_rate;
         global_RespirationRate = 45;
         spo2 = afe44xx_raw_data.spo2;
-        DataPacket[14] = global_RespirationRate;
-        DataPacket[15] = afe44xx_raw_data.spo2;
+
         // originally a 32 bit int - reduce to 8 
         //DataPacket[16] = (uint8_t)afe44xx_raw_data.heart_rate;
         spo2_calc_done = true;
-        afe44xx_raw_data.buffer_count_overflow = false;   
-        DataPacket[16] = global_HeartRate;
+        //afe44xx_raw_data.spO2_data_ready = false;   
+
+        DataPacket[14] = global_RespirationRate;
+        DataPacket[15] = afe44xx_raw_data.spo2;
+        DataPacket[16] = global_HeartRate; 
     }
     else
     {
@@ -331,33 +327,32 @@ void loop()
     // read temperature for every 100ms
     temp = mlx90614.readObjectTempC(); 
     temperature = temp*100 +100;
-    tempint = (uint16_t)temperature;
-    DataPacket[12] = (uint8_t)tempint;
-    DataPacket[13] = (uint8_t)(tempint >> 8);
+    tempint = (int16_t)temperature;
+    DataPacket[12] = (int8_t)tempint;
+    DataPacket[13] = (int8_t)(tempint >> 8);
     
     // Debugging 
+    if (afe44xx_raw_data.spO2_data_ready == true)
+    {
+        //printPacket();
+        //printOximeterVariables(&afe44xx_raw_data);
+        //printECGVariables(&ads1292r_raw_data);
+        //printspO2variables(&afe4490.internal_data); 
+        //Serial.print("Buffer counter ");
+        //+Serial.println(afe4490.dec_buffer_count); 
+        //delay(1000);
+        
+        // Sending arrays as parameters to functions 
+        // specify array - pointer will be sent implicitly
 
-    //printPacket();
-    //printOximeterVariables(&afe44xx_raw_data);
-    //printECGVariables(&ads1292r_raw_data);
-    //printspO2variables(&afe4490.internal_data); 
-    //Serial.print("Buffer counter ");
-    //Serial.println(afe4490.dec_buffer_count); 
-    //delay(5000);
+        //print_buffer(afe4490.aun_ir_buffer);
+        //print_locations_buffer(afe4490.internal_data.testbuffer);        
+        afe44xx_raw_data.spO2_data_ready = false;
+    }
     
-    // Send completed packet    
+    // Send completed packet via serial/USB   
     SPI.setDataMode(SPI_MODE0); 
     send_data_serial_port(); 
-
-    printPacket();
-    printOximeterVariables(&afe44xx_raw_data);
-    printECGVariables(&ads1292r_raw_data);  
-    delay(5000);
-    
-    // Send completed packet    
-    SPI.setDataMode(SPI_MODE0); 
-    //send_data_serial_port(); 
-
 
 }
 
